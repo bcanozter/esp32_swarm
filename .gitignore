@@ -1,0 +1,5 @@
+build/
+managed_components/
+.cache
+sdkconfig
+sdkconfig.old
