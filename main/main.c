@@ -21,6 +21,7 @@
 #include "sdkconfig.h"
 #include <espnow.h>
 #include <state.h>
+#include <mavlink.h>
 
 static const char *TAG = "mesh";
 extern bool sta_got_ip;
@@ -160,5 +161,7 @@ void app_main() {
   xTimerStart(timer, 0);
 #endif
 
+  init_mavlink_client();
   init_state_task();
+  
 }

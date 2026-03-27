@@ -26,6 +26,19 @@ menu "ESP Mesh Lite Configuration"
         help
             Mesh network channel.
 
+    menu "Mavlink UDP"
+
+        config MAVLINK_IP_ADDR
+            string "IPV4 Address"
+            default "192.168.0.69"
+
+        config MAVLINK_PORT
+            int "Port"
+            range 0 65535
+            default 14551
+
+    endmenu
+
     menu "Scan AP Configuration"
 
         config EXAMPLE_SCAN_LIST_SIZE
