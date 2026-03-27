@@ -121,7 +121,7 @@ void app_main() {
 
   esp_bridge_create_all_netif();
 
-  wifi_init();
+  wifi_task_init();
 
   esp_mesh_lite_config_t mesh_lite_config = ESP_MESH_LITE_DEFAULT_INIT();
   mesh_lite_config.join_mesh_ignore_router_status = true;

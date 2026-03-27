@@ -21,6 +21,8 @@ void wifi_scan(void);
 void wifi_init_ap(void);
 void wifi_init(void);
 void app_wifi_set_softap_info(void);
+void wifi_task_init(void);
+void wifi_task_main(void *);
 
 #if CONFIG_ENABLE_WIFI_STA
 #define WIFI_CONNECTED_BIT BIT0

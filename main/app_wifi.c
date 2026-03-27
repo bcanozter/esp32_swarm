@@ -31,8 +31,12 @@ static const char *TAG = "wifi";
 #elif CONFIG_ESP_WIFI_AUTH_WAPI_PSK
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WAPI_PSK
 #endif
+
+#define WIFI_TASK_STACK_SIZE 3 * 1024
+#define WIFI_TASK_PRIORITY 5
 // static char softap_ssid[33] = "";
 // static char softap_psw[64] = "";
+static TaskHandle_t wifi_task_handle = NULL;
 bool sta_got_ip = false;
 
 #if CONFIG_ENABLE_WIFI_STA
@@ -168,6 +172,26 @@ void wifi_init(void) {
   wifi_init_sta();
 #endif
   wifi_init_ap();
+}
+
+void wifi_task_main(void *pvParameter)
+{
+#if CONFIG_ENABLE_ARP_SCAN
+    arp_scan_result_list_init();
+#endif
+    ESP_LOGI(TAG, "Start wifi_task");
+    wifi_init();
+    while (1)
+    {
+        vTaskDelay(60000 / portTICK_PERIOD_MS);
+    }
+}
+
+
+
+void wifi_task_init(void)
+{
+    xTaskCreate(wifi_task_main, "wifi_task", WIFI_TASK_STACK_SIZE, NULL, WIFI_TASK_PRIORITY, &wifi_task_handle);
 }
 
 void app_wifi_set_softap_info(void) {
