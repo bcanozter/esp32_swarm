@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/param.h>
 
+#include "driver/uart.h"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
@@ -17,6 +18,13 @@
 #include <lwip/netdb.h>
 #include "mavlink.h"
 
+// UART
+#define UART_PORT UART_NUM_1
+#define UART_TX_PIN 17
+#define UART_RX_PIN 18
+#define UART_BUF_SIZE 2048
+
+// UDP
 #define HOST_IP_ADDR CONFIG_MAVLINK_IP_ADDR
 #define PORT CONFIG_MAVLINK_PORT
 
@@ -123,6 +131,45 @@ static void udp_client_task(void *pvParameters) {
   // }
 }
 
+static void uart_init(void) {
+
+  uart_config_t uart_config = {
+      .baud_rate = 57600, // match firmware SERIALX_BAUD
+      .data_bits = UART_DATA_8_BITS,
+      .parity = UART_PARITY_DISABLE,
+      .stop_bits = UART_STOP_BITS_1,
+      .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+      .source_clk = UART_SCLK_DEFAULT,
+  };
+
+  uart_driver_install(UART_PORT, UART_BUF_SIZE, 0, 0, NULL, 0);
+  uart_param_config(UART_PORT, &uart_config);
+  uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE,
+               UART_PIN_NO_CHANGE);
+}
+
+static void uart_mavlink_task(void *pvParameters) {
+  ESP_LOGI(TAG, "Start uart_mavlink_task");
+
+  uart_init();
+  uint8_t data[1024];
+  mavlink_message_t msg;
+  mavlink_status_t status;
+
+  while (1) {
+    int len =
+        uart_read_bytes(UART_PORT, data, sizeof(data), 20 / portTICK_PERIOD_MS);
+    if (len > 0) {
+      for (int i = 0; i < len; i++) {
+        if (mavlink_parse_char(MAVLINK_COMM_0, data[i], &msg, &status)) {
+          handle_mavlink_message(msg);
+        }
+      }
+    }
+  }
+}
+
 void init_mavlink_client(void) {
-  xTaskCreate(udp_client_task, "udp_mavlink_client", 4096, NULL, 5, NULL);
+  // xTaskCreate(udp_client_task, "udp_mavlink_client", 4096, NULL, 5, NULL);
+  xTaskCreate(uart_mavlink_task, "uart_mavlink_client", 4096, NULL, 5, NULL);
 }
