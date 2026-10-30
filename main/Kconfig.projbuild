@@ -29,14 +29,25 @@ menu "ESP Mesh Lite Configuration"
 
     menu "Mavlink UDP"
 
+        config MAVLINK_UDP
+            bool "Use UDP instead of UART for the FCU link"
+            default n
+            help
+                Sends a HEARTBEAT every second to the mavproxy udpin port at MAVLINK_IP_ADDR:MAVLINK_PORT and receives the FCU stream back.The root node needs to enable ENABLE_WIFI_STA, so that children
+                can reach it through the root.
+
         config MAVLINK_IP_ADDR
             string "IPV4 Address"
             default "192.168.0.69"
+            help
+                Address of mavproxy.
 
         config MAVLINK_PORT
             int "Port"
             range 0 65535
             default 14551
+            help
+                Mavproxy udpin port.
 
     endmenu
 

@@ -1,32 +1,52 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/timers.h"
 
 #include "espnow.h"
 #include "sdkconfig.h"
 #include "state.h"
-#include "time.h"
 
 static const char *TAG = "state";
 static TaskHandle_t state_main_task_handle = NULL;
-state_t state;
-static void broadcast_state(void) {
-  packet_t *msg_buffer = (packet_t *)malloc(sizeof(packet_t));
-  msg_buffer->id = state.id;
-  msg_buffer->x = state.x;
-  msg_buffer->y = state.y;
-  msg_buffer->z = state.z;
-  esp_now_send_broadcast((const uint8_t *)msg_buffer, sizeof(packet_t), true);
-  free(msg_buffer);
-  msg_buffer = NULL;
+
+static portMUX_TYPE s_state_lock = portMUX_INITIALIZER_UNLOCKED;
+static state_t s_state = {.battery_pct = -1};
+
+void state_set_heartbeat(uint8_t sysid, bool armed) {
+  portENTER_CRITICAL(&s_state_lock);
+  s_state.sysid = sysid;
+  s_state.armed = armed;
+  portEXIT_CRITICAL(&s_state_lock);
 }
 
-static void update_state(void) {
-  state.id = 70;
-  state.x = ((float)rand() / RAND_MAX) * 10.0f;
-  state.y = ((float)rand() / RAND_MAX) * 10.0f;
-  state.z = ((float)rand() / RAND_MAX) * 5.0f;
+void state_set_battery(int8_t battery_pct) {
+  portENTER_CRITICAL(&s_state_lock);
+  s_state.battery_pct = battery_pct;
+  portEXIT_CRITICAL(&s_state_lock);
+}
+
+void state_set_position(int32_t lat, int32_t lon, int32_t relative_alt,
+                        int16_t vx, int16_t vy, int16_t vz) {
+  portENTER_CRITICAL(&s_state_lock);
+  s_state.lat = lat;
+  s_state.lon = lon;
+  s_state.relative_alt = relative_alt;
+  s_state.vx = vx;
+  s_state.vy = vy;
+  s_state.vz = vz;
+  s_state.position_valid = 1;
+  portEXIT_CRITICAL(&s_state_lock);
+}
+
+static void broadcast_state(void) {
+  portENTER_CRITICAL(&s_state_lock);
+  state_t state = s_state;
+  portEXIT_CRITICAL(&s_state_lock);
+
+  if (state.sysid == 0) {
+    return; // no fcu
+  }
+  esp_now_send_broadcast((const uint8_t *)&state, sizeof(state), false);
 }
 
 static void state_main_task(void *pvParameter) {
@@ -34,9 +54,8 @@ static void state_main_task(void *pvParameter) {
   ESP_LOGI(TAG, "Start state_main_task");
 
   while (1) {
-    update_state();
     broadcast_state();
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(STATE_BROADCAST_PERIOD_MS));
   }
 }
 

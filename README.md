@@ -14,8 +14,20 @@ Use esp-mesh-lite to form a mesh network, espnow to broadcast state within this 
 
 Child node:
 
-`idf.py -B build/child -DSDKCONFIG=build/child/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" -p /dev/ttyUSB0 build flash monitor`
+  Config: 
+
+    idf.py -B build/child -DSDKCONFIG=build/child/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" menuconfig
+
+  Build:
+
+    idf.py -B build/child -DSDKCONFIG=build/child/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" -p /dev/ttyUSB0 build flash monitor
 
 Root node (one per mesh), set `MESH_ROOT=y` in the environment:
 
-`MESH_ROOT=y idf.py -B build/root -DSDKCONFIG=build/root/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" -p /dev/ttyUSB0 build flash monitor`
+  Config:
+
+    MESH_ROOT=y idf.py -B build/root -DSDKCONFIG=build/root/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" menuconfig
+  
+  Build:
+
+    MESH_ROOT=y idf.py -B build/root -DSDKCONFIG=build/root/sdkconfig -DSDKCONFIG_DEFAULTS="sdkconfig.defaults.esp32" -p /dev/ttyUSB0 build flash monitor

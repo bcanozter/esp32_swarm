@@ -145,27 +145,43 @@ static esp_err_t espnow_recv_cb(const esp_now_recv_info_t *recv_info,
 
 static void espnow_task(void *pvParameter) {
   esp_mesh_lite_espnow_event_t evt;
+  BaseType_t rx_ret;
 
   ESP_LOGI(TAG, "Start espnow task");
 
-  while (xQueueReceive(espnow_recv_queue, &evt, portMAX_DELAY) == pdTRUE) {
+  while ((rx_ret = xQueueReceive(espnow_recv_queue, &evt, portMAX_DELAY)) ==
+         pdTRUE) {
     switch (evt.id) {
     case ESPNOW_RECV_CB:
       espnow_recv_cb_t *recv_cb = &evt.info.recv_cb;
       app_espnow_data_t *buf = (app_espnow_data_t *)recv_cb->data;
       uint32_t recv_seq = buf->seq;
-      memset(espnow_payload, 0x0, ESPNOW_PAYLOAD_MAX_LEN);
-      memcpy(espnow_payload, buf->payload,
-             recv_cb->data_len - ESPNOW_PAYLOAD_HEAD_LEN);
-      packet_t *state_data = (packet_t *)espnow_payload;
+      int payload_len = recv_cb->data_len - ESPNOW_PAYLOAD_HEAD_LEN;
+      if (payload_len != sizeof(state_t)) {
+        ESP_LOGW(TAG, "Drop packet from " MACSTR ": payload %d, expected %u",
+                 MAC2STR(recv_cb->mac_addr), payload_len,
+                 (unsigned)sizeof(state_t));
+        free(recv_cb->data);
+        recv_cb->data = NULL;
+        break;
+      }
+      memcpy(espnow_payload, buf->payload, payload_len);
+      state_t *state_data = (state_t *)espnow_payload;
 #if CONFIG_APP_DEBUG
       ESP_LOGI(TAG,
                "Receive broadcast data from: " MACSTR
                ", len: %d, recv_seq: %" PRIu32 ", current_seq: %" PRIu32 "",
                MAC2STR(recv_cb->mac_addr), recv_cb->data_len, recv_seq,
                current_seq);
-      ESP_LOGI(TAG, "ID: %u X: %.4f, Y: %.4f, Z: %.4f\n", state_data->id,
-               state_data->x, state_data->y, state_data->z);
+      ESP_LOGI(TAG,
+               "sysid=%u armed=%u pos_valid=%u bat=%d lat=%" PRId32
+               " lon=%" PRId32 " rel_alt=%" PRId32 "mm v=(%d,%d,%d)cm/s",
+               state_data->sysid, state_data->armed, state_data->position_valid,
+               state_data->battery_pct, state_data->lat, state_data->lon,
+               state_data->relative_alt, state_data->vx, state_data->vy,
+               state_data->vz);
+      ESP_LOGI(TAG, "espnow_task stack high water mark: %u bytes",
+               (unsigned)uxTaskGetStackHighWaterMark(NULL));
 #endif
       free(recv_cb->data);
       recv_cb->data = NULL;
@@ -175,6 +191,8 @@ static void espnow_task(void *pvParameter) {
       break;
     }
   }
+  ESP_LOGE(TAG, "espnow_task exiting: xQueueReceive returned %d, queue %p",
+           (int)rx_ret, (void *)espnow_recv_queue);
 }
 
 esp_err_t esp_now_send_broadcast(const uint8_t *payload, size_t payload_len,

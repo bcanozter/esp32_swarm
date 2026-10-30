@@ -24,6 +24,8 @@
 #include <mavlink.h>
 
 static const char *TAG = "mesh";
+
+#define AP_INACTIVE_TIME_S 10 // minimum allowed, 300s default
 extern bool sta_got_ip;
 
 typedef struct {
@@ -146,6 +148,9 @@ void app_main() {
   strcpy(node_config.id, "-1");
   esp_wifi_get_mac(ESP_IF_WIFI_STA, node_config.sta_mac);
   esp_mesh_lite_start();
+
+  // Drop child node after AP_INACTIVE_TIME_S
+  ESP_ERROR_CHECK(esp_wifi_set_inactive_time(WIFI_IF_AP, AP_INACTIVE_TIME_S));
 
 #if CONFIG_ENABLE_WIFI_STA
   while (!sta_got_ip) {
