@@ -8,6 +8,7 @@ menu "ESP Mesh Lite Configuration"
     config MESH_ROOT
         select JOIN_MESH_IGNORE_ROUTER_STATUS
         bool "Root device"
+        default y if "$(MESH_ROOT)" = "y"
         default n
         help
             Configure the root device type.
