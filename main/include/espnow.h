@@ -6,13 +6,6 @@
 #define ESPNOW_TASK_STACK_SIZE 3 * 1024
 #define ESPNOW_TASK_PRIORITY 5
 
-typedef struct esp_now_msg_send {
-  uint32_t retry_times;
-  uint32_t max_retry;
-  uint32_t msg_len;
-  void *sent_msg;
-} esp_now_msg_send_t;
-
 #define ESPNOW_PAYLOAD_HEAD_LEN (5)
 #define ESPNOW_QUEUE_SIZE (50)
 

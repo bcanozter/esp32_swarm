@@ -149,6 +149,7 @@ void app_main() {
 
 #if CONFIG_ENABLE_WIFI_STA
   while (!sta_got_ip) {
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 #endif
 

@@ -16,10 +16,8 @@ static const char *TAG = "espnow";
 static uint32_t current_seq = 0;
 static TaskHandle_t espnow_task_ctrl_handle = NULL;
 static QueueHandle_t espnow_recv_queue = NULL;
-static SemaphoreHandle_t sent_msgs_mutex = NULL;
 static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                                     0xFF, 0xFF, 0xFF};
-static esp_now_msg_send_t *sent_msgs;
 uint8_t espnow_payload[ESPNOW_PAYLOAD_MAX_LEN];
 
 esp_err_t espnow_data_parse(const uint8_t *data, uint16_t data_len) {
@@ -82,47 +80,6 @@ esp_err_t app_espnow_create_peer(uint8_t dst_mac[ESP_NOW_ETH_ALEN]) {
   free(peer);
 
   return ret;
-}
-
-static void esp_now_send_timer_cb(TimerHandle_t timer) {
-  xSemaphoreTake(sent_msgs_mutex, portMAX_DELAY);
-  if (sent_msgs->max_retry > sent_msgs->retry_times) {
-    sent_msgs->retry_times++;
-    if (sent_msgs->sent_msg) {
-      app_espnow_create_peer(s_broadcast_mac);
-      esp_err_t ret =
-          esp_mesh_lite_espnow_send(ESPNOW_DATA_TYPE_RESERVE, s_broadcast_mac,
-                                    sent_msgs->sent_msg, sent_msgs->msg_len);
-      if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Send error: %d [%s %d]", ret, __func__, __LINE__);
-      }
-    }
-  } else {
-    if (sent_msgs->max_retry) {
-      sent_msgs->retry_times = 0;
-      sent_msgs->max_retry = 0;
-      sent_msgs->msg_len = 0;
-      if (sent_msgs->sent_msg) {
-        free(sent_msgs->sent_msg);
-        sent_msgs->sent_msg = NULL;
-      }
-    }
-  }
-  xSemaphoreGive(sent_msgs_mutex);
-}
-
-void esp_now_remove_send_msgs(void) {
-  xSemaphoreTake(sent_msgs_mutex, portMAX_DELAY);
-  if (sent_msgs->max_retry) {
-    sent_msgs->retry_times = 0;
-    sent_msgs->max_retry = 0;
-    sent_msgs->msg_len = 0;
-    if (sent_msgs->sent_msg) {
-      free(sent_msgs->sent_msg);
-      sent_msgs->sent_msg = NULL;
-    }
-  }
-  xSemaphoreGive(sent_msgs_mutex);
 }
 
 #if ESP_IDF_VERSION > ESP_IDF_VERSION_VAL(5, 4, 1)
@@ -222,22 +179,20 @@ static void espnow_task(void *pvParameter) {
 
 esp_err_t esp_now_send_broadcast(const uint8_t *payload, size_t payload_len,
                                  bool seq_init) {
-  esp_err_t ret = ESP_OK;
-  uint8_t *buf = calloc(1, payload_len + ESPNOW_PAYLOAD_HEAD_LEN);
-  espnow_data_prepare(buf, payload, payload_len, seq_init);
+  // mesh-lite type byte + header + payload
+  size_t len = 1 + ESPNOW_PAYLOAD_HEAD_LEN + payload_len;
+  uint8_t *buf = calloc(1, len);
+  if (buf == NULL) {
+    return ESP_ERR_NO_MEM;
+  }
+  buf[0] = ESPNOW_DATA_TYPE_RESERVE;
+  espnow_data_prepare(buf + 1, payload, payload_len, seq_init);
   app_espnow_create_peer(s_broadcast_mac);
-  ret = esp_mesh_lite_espnow_send(ESPNOW_DATA_TYPE_RESERVE, s_broadcast_mac,
-                                  buf, payload_len + ESPNOW_PAYLOAD_HEAD_LEN);
+  esp_err_t ret = esp_now_send(s_broadcast_mac, buf, len);
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Send error: %d [%s %d]", ret, __func__, __LINE__);
   }
-
-  xSemaphoreTake(sent_msgs_mutex, portMAX_DELAY);
-  sent_msgs->retry_times = 0;
-  sent_msgs->max_retry = 1;
-  sent_msgs->msg_len = payload_len + ESPNOW_PAYLOAD_HEAD_LEN;
-  sent_msgs->sent_msg = buf;
-  xSemaphoreGive(sent_msgs_mutex);
+  free(buf);
   return ret;
 }
 
@@ -280,18 +235,6 @@ esp_err_t app_espnow_init(void) {
 
   xTaskCreate(espnow_task, "espnow_task", ESPNOW_TASK_STACK_SIZE, NULL,
               ESPNOW_TASK_PRIORITY, &espnow_task_ctrl_handle);
-
-  sent_msgs = (esp_now_msg_send_t *)malloc(sizeof(esp_now_msg_send_t));
-  sent_msgs->max_retry = 0;
-  sent_msgs->msg_len = 0;
-  sent_msgs->retry_times = 0;
-  sent_msgs->sent_msg = NULL;
-  sent_msgs_mutex = xSemaphoreCreateMutex();
-
-  TimerHandle_t esp_now_send_timer =
-      xTimerCreate("esp_now_send_timer", 100 / portTICK_PERIOD_MS, pdTRUE, NULL,
-                   esp_now_send_timer_cb);
-  xTimerStart(esp_now_send_timer, portMAX_DELAY);
 
   return ESP_OK;
 }
