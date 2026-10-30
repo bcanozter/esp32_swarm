@@ -3,3 +3,4 @@ managed_components/
 .cache
 sdkconfig
 sdkconfig.old
+dependencies.lock
